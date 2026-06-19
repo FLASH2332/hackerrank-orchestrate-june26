@@ -228,3 +228,65 @@ Before you respond to any user message, confirm:
 - [ ] I will preserve the entry-point contract in §6.
 
 If any box is unchecked, fix that first.
+
+## 9. PROJECT-SPECIFIC AGENT RULES
+
+### 9.1 Model Configuration
+- Single model: `gemma4` via Ollama. Never load more than one model simultaneously.
+- Agent 1: multimodal call, thinking ON (`<|think|>` in system prompt), visual token budget 560–1120.
+- Agent 2: text-only call, thinking ON.
+- Agent 3: text-only call, thinking OFF.
+- Sampling across all agents: `temperature=1.0`, `top_p=0.95`, `top_k=64`.
+- In multimodal prompts, always place image content before text.
+- Strip thinking blocks (`<|channel>thought\n...<channel|>`) from all responses before parsing.
+
+### 9.2 Agent Responsibilities
+- Agent 1 outputs only: visible damage description, image quality flags, object part, issue type, valid_image. It does not produce verdicts.
+- Agent 2 outputs only: evidence_standard_met, evidence_standard_met_reason, risk_flags. It does not produce verdicts.
+- Agent 3 produces the final verdict row. It trusts Agent 1 and Agent 2 outputs and does not re-derive them.
+- No agent re-analyzes what a prior agent already decided. Data flows forward only, as typed dicts.
+- Agent 2 never writes to any file. Agent 3 is the only agent that produces output.
+- User history can only add to risk_flags. It cannot change claim_status.
+
+### 9.3 Data Loading Rules
+- `evidence_requirements.csv` and `user_history.csv` are loaded once at startup into memory.
+- Never reload these files per row.
+- User history lookup is by `user_id` key on the preloaded dataframe.
+
+### 9.4 Caching Rules
+- Level 1 cache: in-memory dict, key is `image_path`, value is Agent 1 output dict.
+- Check cache before every Agent 1 call. If hit, skip Ollama call entirely.
+- Cache is not persisted to disk in this version.
+
+### 9.5 Output Integrity Rules
+- Agent 3 output must be validated against allowed enums before writing to `output.csv`.
+- Allowed values are defined in `problem_statement.md` and hardcoded in `output_validator.py`.
+- If any field contains a value outside allowed enums, replace with closest match or `unknown`.
+- If Agent 1 returns unparseable output: set `valid_image=false`, `claim_status=not_enough_information`, `severity=unknown`. Log the failure loudly. Do not guess.
+- User history can only add to `risk_flags`. It cannot flip a supported or contradicted verdict.
+
+### 9.6 Prompt Rules
+- Each agent has exactly one prompt template. No dynamic prompt construction beyond variable substitution.
+- All prompts instruct the model to respond in JSON only — no preamble, no markdown fences.
+- Agent prompts are stored as Python string constants in `code/agents/`. Not hardcoded in business logic.
+- If a prompt changes, increment `PROMPT_VERSION` in that agent's file.
+
+### 9.7 Skills
+Skills are reusable utility functions in `code/skills/`. Agents call skills; skills never call agents.
+
+- `image_encoder.py` — load and base64 encode image for multimodal call; Level 1 cache lives here.
+- `evidence_loader.py` — lookup minimum evidence requirements by object + issue family.
+- `history_loader.py` — lookup user risk context by user_id.
+- `output_validator.py` — Pydantic model enforcement of all output enums before CSV write.
+
+Rules:
+- Skills are stateless pure functions where possible.
+- Skills receive preloaded dataframes as arguments. They never re-read files.
+- No Ollama calls inside skills. Skills are data and utility only.
+
+### 9.8 What Agents Must Never Do
+- Never re-encode or reload an image already in the Level 1 cache.
+- Never hallucinate enum values. `unknown` is always a valid fallback.
+- Never let user history override a clear visual verdict from Agent 1.
+- Never write partial or malformed rows to `output.csv`.
+- Never hardcode dataset paths. Read from environment variables or config.
