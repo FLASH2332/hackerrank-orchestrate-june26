@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Environments
+.env
+.venv
+venv/
+
+# Logs (per AGENTS.md §2 — log lives outside repo anyway)
+*.log
+
+# Output files (don't commit predictions)
+output.csv
+output_partial.csv
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
