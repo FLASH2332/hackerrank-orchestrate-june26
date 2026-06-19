@@ -232,7 +232,7 @@ If any box is unchecked, fix that first.
 ## 9. PROJECT-SPECIFIC AGENT RULES
 
 ### 9.1 Model Configuration
-- Single model: `gemma4` via Ollama. Never load more than one model simultaneously.
+- Single model: `gemma3n:e4b` via Ollama. Never load more than one model simultaneously.
 - Agent 1: multimodal call, thinking ON (`<|think|>` in system prompt), visual token budget 560–1120.
 - Agent 2: text-only call, thinking ON.
 - Agent 3: text-only call, thinking OFF.
