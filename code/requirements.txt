@@ -1,0 +1,6 @@
+pandas
+pydantic
+pillow
+requests
+tqdm
+python-dotenv
