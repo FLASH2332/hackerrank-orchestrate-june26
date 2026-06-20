@@ -3,10 +3,11 @@ import os
 import re
 import json
 import requests
+from skills.output_validator import validate_output
+from skills.api_handler import safe_llm_request
 
 # Add parent directory (code/) to sys.path so we can import skills
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from skills.output_validator import validate_output
 
 PROMPT_VERSION = "v1"
 
@@ -60,23 +61,62 @@ SAFE_DEFAULT_RESPONSE = {
 
 
 def extract_json(text: str) -> str:
-    """
-    Extracts the JSON substring from response, stripping markdown blocks if present.
-    """
     text = text.strip()
+    
+    # Strip markdown fences
     if text.startswith("```"):
         first_newline = text.find("\n")
         if first_newline != -1:
             text = text[first_newline:].strip()
         if text.endswith("```"):
             text = text[:-3].strip()
-    return text
+    
+    # Find first { and last }
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        text = text[start:end+1]
+    
+    # Remove ALL backslashes before underscores (llava artifact)
+    text = text.replace("\\_", "_")
+    
+    return text.strip()
 
+def _safe(val) -> str:
+    return str(val).replace("{", "{{").replace("}", "}}")
+
+# Guardrail: detect prompt injection signals
+INJECTION_KEYWORDS = [
+    # English
+    "approve", "ignore", "override", "disregard",
+    "regardless", "irrespective", "bypass",
+    "always approve", "system prompt", "previous instructions",
+    "mark supported", "mark as supported",
+    # Hindi transliterated
+    "approve karo", "claim approve",
+    # Generic patterns
+    "ignore this", "ignore all", "forget previous",
+]
+
+def check_injection(text: str) -> bool:
+    text_lower = text.lower()
+    return any(kw in text_lower for kw in INJECTION_KEYWORDS)
 
 class VerdictWriterAgent:
-    def __init__(self, ollama_url: str = "http://localhost:11434"):
+    def __init__(self, ollama_url: str = "http://localhost:11434",
+                 model: str = "gemma3n:e4b",
+                 temperature: float = 1.0,
+                 top_p: float = 0.95,
+                 top_k: int = 64,
+                 api_key: str = "",
+                 api_base_url: str = ""):
         self.ollama_url = ollama_url
-        self.model = "gemma3n:e4b"
+        self.model = model
+        self.temperature = temperature
+        self.top_p = top_p
+        self.top_k = top_k
+        self.api_key = api_key
+        self.api_base_url = api_base_url
 
     def write(self, agent1_output: dict, agent2_output: dict,
               user_claim: str, claim_object: str, 
@@ -91,52 +131,68 @@ class VerdictWriterAgent:
 
         # 1. Format prompt (without <|think|> tag, per instructions)
         sys_prompt = PROMPT_TEMPLATE.format(
-            visible_part=agent1_output.get("object_part", "unknown"),
-            visible_issue=agent1_output.get("issue_type", "unknown"),
-            visible_description=agent1_output.get("visible_description", ""),
-            valid_image=str(agent1_output.get("valid_image", False)),
-            evidence_standard_met=str(agent2_output.get("evidence_standard_met", False)),
-            evidence_standard_met_reason=agent2_output.get("evidence_standard_met_reason", ""),
-            risk_flags=risk_flags_str,
-            claim_object=claim_object,
-            user_claim=user_claim,
-            user_id=user_id,
-            image_paths=image_paths
+            visible_part=_safe(agent1_output.get("object_part", "unknown")),
+            visible_issue=_safe(agent1_output.get("issue_type", "unknown")),
+            visible_description=_safe(agent1_output.get("visible_description", "")),
+            valid_image=_safe(agent1_output.get("valid_image", False)),
+            evidence_standard_met=_safe(agent2_output.get("evidence_standard_met", False)),
+            evidence_standard_met_reason=_safe(agent2_output.get("evidence_standard_met_reason", "")),
+            risk_flags=_safe(risk_flags_str),
+            claim_object=_safe(claim_object),
+            user_claim=_safe(user_claim),
+            user_id=_safe(user_id),
+            image_paths=_safe(image_paths)
         )
+        
 
-        # 2. Construct text-only Ollama call payload (Thinking OFF)
-        payload = {
-            "model": self.model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": sys_prompt
-                },
-                {
-                    "role": "user",
-                    "content": "Generate final claims verdict JSON."
-                }
-            ],
-            "options": {
-                "temperature": 1.0,
-                "top_p": 0.95,
-                "top_k": 64
-            },
-            "stream": False
-        }
-
+        # 2. Construct payload and call API (Thinking OFF)
         verdict_data = SAFE_DEFAULT_RESPONSE.copy()
 
         try:
-            # 3. Call Ollama chat API
-            response = requests.post(f"{self.ollama_url}/api/chat", json=payload, timeout=60)
-            response.raise_for_status()
-            
-            resp_data = response.json()
-            raw_content = resp_data.get("message", {}).get("content", "")
+            if self.api_key:
+                payload = {
+                    "model": self.model,
+                    "messages": [
+                        {"role": "system", "content": sys_prompt},
+                        {"role": "user", "content": "Generate final claims verdict JSON."}
+                    ],
+                    "temperature": self.temperature,
+                    "top_p": self.top_p
+                }
+                headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+                response = safe_llm_request(lambda: requests.post(f"{self.api_base_url}/chat/completions", json=payload, headers=headers, timeout=60))
+                resp_data = response.json()
+                raw_content = resp_data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            else:
+                payload = {
+                    "model": self.model,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": sys_prompt
+                        },
+                        {
+                            "role": "user",
+                            "content": "Generate final claims verdict JSON."
+                        }
+                    ],
+                    "options": {
+                        "temperature": self.temperature,
+                        "top_p": self.top_p,
+                        "top_k": self.top_k
+                    },
+                    "stream": False
+                }
+                response = safe_llm_request(lambda: requests.post(f"{self.ollama_url}/api/chat", json=payload, timeout=60))
+                resp_data = response.json()
+                raw_content = resp_data.get("message", {}).get("content", "")
             
             # Since thinking is OFF, we don't expect a reasoning trace, but just in case, extract JSON
             json_content = extract_json(raw_content)
+
+            print(f"[DEBUG] Raw model output: {repr(raw_content[:500])}", file=sys.stderr)
+            print(f"[DEBUG] Cleaned JSON: {repr(json_content[:500])}", file=sys.stderr)
+
             data = json.loads(json_content)
             
             # Extract keys
@@ -166,6 +222,21 @@ class VerdictWriterAgent:
             "valid_image": agent1_output.get("valid_image", False),
             "severity": verdict_data["severity"]
         }
+        
+        visible_desc = agent1_output.get("visible_description", "")
+        quality_flags = agent1_output.get("image_quality_flags", "")
+
+        if (check_injection(visible_desc) or
+            check_injection(user_claim) or
+            "text_instruction_present" in quality_flags):
+
+            print(f"[SECURITY] Prompt injection detected for user {user_id}", file=sys.stderr)
+            raw_output["claim_status"] = "not_enough_information"
+            raw_output["severity"] = "unknown"
+            raw_output["supporting_image_ids"] = "none"
+            raw_output["valid_image"] = False
+            raw_output["risk_flags"] = "text_instruction_present;manual_review_required"
+            raw_output["claim_status_justification"] = "Claim flagged for manual review: possible prompt injection detected in image or user input."
 
         # 5. Enforce hard rules in python (safety net)
         # If evidence standard is not met or image is invalid, override status and severity

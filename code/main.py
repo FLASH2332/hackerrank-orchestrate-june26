@@ -6,6 +6,7 @@ from tqdm import tqdm
 # Add parent directory (code/) to sys.path so we can import agents and skills
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+from config import cfg
 from skills.evidence_loader import load_evidence_requirements
 from skills.history_loader import load_user_history
 from skills.output_validator import validate_output
@@ -15,13 +16,12 @@ from agents.agent3_verdict_writer import VerdictWriterAgent
 
 
 def main():
-    # 1. Read environment variables with sensible defaults
-    claims_csv_path = os.environ.get("CLAIMS_CSV", "dataset/claims.csv")
-    evidence_csv_path = os.environ.get("EVIDENCE_CSV", "dataset/evidence_requirements.csv")
-    history_csv_path = os.environ.get("HISTORY_CSV", "dataset/user_history.csv")
-    images_dir = os.environ.get("IMAGES_DIR", "dataset")
-    output_csv_path = os.environ.get("OUTPUT_CSV", "output.csv")
-    ollama_url = os.environ.get("OLLAMA_URL", "http://localhost:11434")
+    # 1. All config comes from the centralized cfg (loaded from .env)
+    claims_csv_path = cfg.CLAIMS_CSV
+    evidence_csv_path = cfg.EVIDENCE_CSV
+    history_csv_path = cfg.HISTORY_CSV
+    images_dir = cfg.IMAGES_DIR
+    output_csv_path = cfg.OUTPUT_CSV
 
     print("Starting Claim Verification Pipeline...")
     print(f"  Claims input: {claims_csv_path}")
@@ -29,7 +29,8 @@ def main():
     print(f"  User history: {history_csv_path}")
     print(f"  Images base dir: {images_dir}")
     print(f"  Output file: {output_csv_path}")
-    print(f"  Ollama URL: {ollama_url}")
+    print(f"  Ollama URL: {cfg.OLLAMA_URL}")
+    print(f"  Model: {cfg.CLOUD_MODEL if cfg.API_KEY and cfg.CLOUD_MODEL else cfg.OLLAMA_MODEL}")
 
     # 2. Check and validate paths
     if not os.path.exists(evidence_csv_path):
@@ -46,11 +47,20 @@ def main():
     evidence_df = load_evidence_requirements(evidence_csv_path)
     history_df = load_user_history(history_csv_path)
 
-    # 4. Initialize cache and agents
+    # 4. Initialize cache and agents (model + sampling from config)
     cache = {}
-    agent1 = ImageAnalystAgent(ollama_url)
-    agent2 = EvidenceCheckerAgent(ollama_url)
-    agent3 = VerdictWriterAgent(ollama_url)
+    agent_kwargs = dict(
+        ollama_url=cfg.OLLAMA_URL,
+        model=cfg.CLOUD_MODEL if cfg.API_KEY and cfg.CLOUD_MODEL else cfg.OLLAMA_MODEL,
+        temperature=cfg.MODEL_TEMPERATURE,
+        top_p=cfg.MODEL_TOP_P,
+        top_k=cfg.MODEL_TOP_K,
+        api_key=cfg.API_KEY,
+        api_base_url=cfg.API_BASE_URL,
+    )
+    agent1 = ImageAnalystAgent(**agent_kwargs)
+    agent2 = EvidenceCheckerAgent(**agent_kwargs)
+    agent3 = VerdictWriterAgent(**agent_kwargs)
 
     # 5. Read input claims
     try:

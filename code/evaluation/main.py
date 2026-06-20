@@ -8,6 +8,7 @@ from tqdm import tqdm
 code_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, code_dir)
 
+from config import cfg
 from skills.evidence_loader import load_evidence_requirements
 from skills.history_loader import load_user_history
 from skills.output_validator import validate_output
@@ -39,7 +40,7 @@ def normalize(val):
     return s
 
 
-def run_pipeline_on_sample(sample_csv_path, evidence_csv_path, history_csv_path, images_dir, ollama_url):
+def run_pipeline_on_sample(sample_csv_path, evidence_csv_path, history_csv_path, images_dir):
     """
     Runs the full 3-agent pipeline on the sample CSV and returns
     (predictions_list, total_agent1_calls, total_agent2_calls, total_agent3_calls, total_images, elapsed_seconds).
@@ -48,9 +49,18 @@ def run_pipeline_on_sample(sample_csv_path, evidence_csv_path, history_csv_path,
     history_df = load_user_history(history_csv_path)
 
     cache = {}
-    agent1 = ImageAnalystAgent(ollama_url)
-    agent2 = EvidenceCheckerAgent(ollama_url)
-    agent3 = VerdictWriterAgent(ollama_url)
+    agent_kwargs = dict(
+        ollama_url=cfg.OLLAMA_URL,
+        model=cfg.CLOUD_MODEL if cfg.API_KEY and cfg.CLOUD_MODEL else cfg.OLLAMA_MODEL,
+        temperature=cfg.MODEL_TEMPERATURE,
+        top_p=cfg.MODEL_TOP_P,
+        top_k=cfg.MODEL_TOP_K,
+        api_key=cfg.API_KEY,
+        api_base_url=cfg.API_BASE_URL,
+    )
+    agent1 = ImageAnalystAgent(**agent_kwargs)
+    agent2 = EvidenceCheckerAgent(**agent_kwargs)
+    agent3 = VerdictWriterAgent(**agent_kwargs)
 
     claims_df = pd.read_csv(sample_csv_path)
     print(f"Loaded {len(claims_df)} sample rows for evaluation.")
@@ -163,7 +173,7 @@ def print_summary_table(scores, n_rows):
 
 
 def write_report(report_path, scores, n_rows, a1_calls, a2_calls, a3_calls,
-                 n_images, elapsed, cache_size):
+                 n_images, elapsed, cache_size, model_name):
     """Writes evaluation_report.md to disk."""
     total_calls = a1_calls + a2_calls + a3_calls
     avg_per_row = elapsed / n_rows if n_rows > 0 else 0
@@ -217,7 +227,7 @@ def write_report(report_path, scores, n_rows, a1_calls, a2_calls, a3_calls,
         "",
         "### Cost",
         "",
-        "- Model: `gemma3n:e4b` via local Ollama",
+        f"- Model: `{model_name}` via local Ollama",
         "- API cost: **$0.00** (local inference)",
         "- Compute cost: local GPU / CPU time only",
         "",
@@ -233,9 +243,7 @@ def write_report(report_path, scores, n_rows, a1_calls, a2_calls, a3_calls,
         "Prevents re-encoding the same image across rows. Not persisted to disk.",
         "- **Batching**: No batching; each row is processed sequentially with "
         "one Ollama call per agent per row.",
-        "- **Retry strategy**: No automatic retries. On failure, a safe fallback "
-        "row is generated with `claim_status=not_enough_information` and "
-        "`severity=unknown`.",
+        "- **Retry strategy**: Implemented exponential backoff with jitter via `safe_llm_request`. Handles HTTP 429, 5xx, and timeouts safely across all agents.",
         "- **Rate limiting**: Not applicable for local Ollama. No TPM/RPM limits.",
         "- **Parallelism**: Disabled. Sequential processing only to respect "
         "single-model constraint (AGENTS.md §9.1).",
@@ -249,13 +257,12 @@ def write_report(report_path, scores, n_rows, a1_calls, a2_calls, a3_calls,
 
 
 def main():
-    # Paths from environment variables with sensible defaults
-    sample_csv = os.environ.get("SAMPLE_CSV", "dataset/sample_claims.csv")
-    evidence_csv = os.environ.get("EVIDENCE_CSV", "dataset/evidence_requirements.csv")
-    history_csv = os.environ.get("HISTORY_CSV", "dataset/user_history.csv")
-    images_dir = os.environ.get("IMAGES_DIR", "dataset")
-    ollama_url = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-    report_path = os.environ.get("EVAL_REPORT", "code/evaluation/evaluation_report.md")
+    # All config comes from the centralized cfg (loaded from .env)
+    sample_csv = cfg.SAMPLE_CSV
+    evidence_csv = cfg.EVIDENCE_CSV
+    history_csv = cfg.HISTORY_CSV
+    images_dir = cfg.IMAGES_DIR
+    report_path = cfg.EVAL_REPORT
 
     print("=" * 50)
     print("  EVALUATION PIPELINE")
@@ -264,7 +271,8 @@ def main():
     print(f"  Evidence CSV: {evidence_csv}")
     print(f"  History CSV: {history_csv}")
     print(f"  Images Dir: {images_dir}")
-    print(f"  Ollama URL: {ollama_url}")
+    print(f"  Ollama URL: {cfg.OLLAMA_URL}")
+    print(f"  Model: {cfg.CLOUD_MODEL if cfg.API_KEY and cfg.CLOUD_MODEL else cfg.OLLAMA_MODEL}")
     print(f"  Report Path: {report_path}")
     print()
 
@@ -274,7 +282,7 @@ def main():
 
     # Run the pipeline
     results, a1, a2, a3, n_images, elapsed = run_pipeline_on_sample(
-        sample_csv, evidence_csv, history_csv, images_dir, ollama_url
+        sample_csv, evidence_csv, history_csv, images_dir
     )
 
     # Load expected values
@@ -298,7 +306,8 @@ def main():
     cache_size = len(all_img_paths)
 
     # Write report
-    write_report(report_path, scores, n_rows, a1, a2, a3, n_images, elapsed, cache_size)
+    model_used = cfg.CLOUD_MODEL if cfg.API_KEY and cfg.CLOUD_MODEL else cfg.OLLAMA_MODEL
+    write_report(report_path, scores, n_rows, a1, a2, a3, n_images, elapsed, cache_size, model_used)
 
     print(f"\nEvaluation complete. Processed {n_rows} rows in {elapsed:.1f}s.")
 
