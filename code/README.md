@@ -42,7 +42,7 @@ Claims CSV
       output.csv
 
 ```
-![Architecture Diagram](Architecture.png)
+![Architecture Diagram](..\Architecture.png)
 
 
 **Skills** (stateless utility functions in `code/skills/`):
