@@ -40,7 +40,10 @@ Claims CSV
            │
            ▼
       output.csv
+
 ```
+![Architecture Diagram](Architecture.png)
+
 
 **Skills** (stateless utility functions in `code/skills/`):
 - `image_encoder.py` — Base64 encodes images with Level 1 in-memory cache
@@ -54,18 +57,18 @@ Claims CSV
 
 - **Python 3.10+**
 - **Ollama** installed and running locally ([install guide](https://ollama.com))
-- **gemma3n:e4b** model pulled in Ollama
+- **llava:7b** model pulled in Ollama
 
 ```bash
 # Install Ollama (if not already installed), then pull the model
-ollama pull gemma3n:e4b
+ollama pull llava:7b
 ```
 
 Verify Ollama is running:
 
 ```bash
 ollama list
-# Should show gemma3n:e4b in the list
+# Should show llava:7b in the list
 ```
 
 ---
@@ -227,10 +230,18 @@ code/
 
 ## Design Decisions
 
-- **Single model**: Only `gemma3n:e4b` is loaded, as required by the project rules. No model swapping between agents.
+- **Single model**: Only `llava:7b` is loaded, as required by the project rules. No model swapping between agents.
 - **Sequential processing**: Each row is processed one at a time through all 3 agents. No parallelism.
 - **Level 1 cache**: In-memory dict keyed by exact `image_path` string. Prevents re-encoding the same image across rows. Not persisted to disk.
 - **No-throw guarantee**: Every agent and the output validator are wrapped in try-except blocks. Failures produce safe fallback rows with `claim_status=not_enough_information` and `severity=unknown`.
 - **Enum enforcement**: The output validator uses fuzzy matching (`difflib.get_close_matches`) to correct near-miss enum values before writing to CSV.
 - **Forward-only data flow**: Agent 1 output feeds Agent 2, Agent 2 output feeds Agent 3. No agent re-analyzes prior agent decisions.
 - **History cannot override verdicts**: User history can only add risk flags. It cannot flip a supported/contradicted verdict.
+
+## Security
+
+- **Prompt injection guardrail**: Agent 1 detects embedded text instructions 
+  in images in any language. Agent 3 enforces a Python-level hard override — 
+  if injection is detected, claim is forced to `not_enough_information` and 
+  flagged `text_instruction_present;manual_review_required`.
+- **History cannot override verdicts**: User history adds risk context only.
