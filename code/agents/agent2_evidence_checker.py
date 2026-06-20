@@ -204,8 +204,8 @@ class EvidenceCheckerAgent:
             cleaned_content = strip_thinking(raw_content)
             json_content = extract_json(cleaned_content)
             
-            print(f"[DEBUG] Raw model output: {repr(raw_content[:500])}", file=sys.stderr)
-            print(f"[DEBUG] Cleaned JSON: {repr(json_content[:500])}", file=sys.stderr)
+            # print(f"[DEBUG] Raw model output: {repr(raw_content[:500])}", file=sys.stderr)
+            # print(f"[DEBUG] Cleaned JSON: {repr(json_content[:500])}", file=sys.stderr)
 
             data = json.loads(json_content)
             

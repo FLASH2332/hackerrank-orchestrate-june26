@@ -190,8 +190,8 @@ class VerdictWriterAgent:
             # Since thinking is OFF, we don't expect a reasoning trace, but just in case, extract JSON
             json_content = extract_json(raw_content)
 
-            print(f"[DEBUG] Raw model output: {repr(raw_content[:500])}", file=sys.stderr)
-            print(f"[DEBUG] Cleaned JSON: {repr(json_content[:500])}", file=sys.stderr)
+            # print(f"[DEBUG] Raw model output: {repr(raw_content[:500])}", file=sys.stderr)
+            # print(f"[DEBUG] Cleaned JSON: {repr(json_content[:500])}", file=sys.stderr)
 
             data = json.loads(json_content)
             

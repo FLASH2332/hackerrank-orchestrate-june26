@@ -200,8 +200,8 @@ class ImageAnalystAgent:
             # 6. Extract JSON content
             json_content = extract_json(cleaned_content)
 
-            print(f"[DEBUG] Raw model output: {repr(raw_content[:500])}", file=sys.stderr)
-            print(f"[DEBUG] Cleaned JSON: {repr(json_content[:500])}", file=sys.stderr)
+            # print(f"[DEBUG] Raw model output: {repr(raw_content[:500])}", file=sys.stderr)
+            # print(f"[DEBUG] Cleaned JSON: {repr(json_content[:500])}", file=sys.stderr)
             
             # 7. Parse and validate JSON structure
             data = json.loads(json_content)
