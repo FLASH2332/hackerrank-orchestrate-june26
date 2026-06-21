@@ -6,11 +6,11 @@ Evaluated on **20** sample rows from `dataset/sample_claims.csv`.
 
 | Field | Accuracy |
 |---|---|
-| claim_status | 70.0% |
-| issue_type | 55.0% |
-| object_part | 75.0% |
+| claim_status | 65.0% |
+| issue_type | 50.0% |
+| object_part | 80.0% |
 | severity | 60.0% |
-| evidence_standard_met | 95.0% |
+| evidence_standard_met | 90.0% |
 | valid_image | 90.0% |
 
 ## Operational Analysis
@@ -37,14 +37,14 @@ Evaluated on **20** sample rows from `dataset/sample_claims.csv`.
 
 ### Cost
 
-- Model: `llava:7b` via local Ollama
+- Model: `gemma3:4b` via local Ollama
 - API cost: **$0.00** (local inference)
 - Compute cost: local GPU / CPU time only
 
 ### Runtime
 
-- Total elapsed time: 576.6s
-- Average per row: 28.8s
+- Total elapsed time: 524.7s
+- Average per row: 26.2s
 - Rows processed: 20
 
 ### Strategy Notes

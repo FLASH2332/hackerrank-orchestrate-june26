@@ -2,6 +2,7 @@ import os
 import sys
 import pandas as pd
 from tqdm import tqdm
+import time
 
 # Add parent directory (code/) to sys.path so we can import agents and skills
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -150,6 +151,9 @@ def main():
             }
             fallback_row = validate_output(fallback_raw)
             results.append(fallback_row)
+        
+        if cfg.API_KEY:
+            time.sleep(2)    
 
     # 7. Write results to output.csv in the correct schema order
     try:
