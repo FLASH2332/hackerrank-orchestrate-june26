@@ -14,6 +14,22 @@ from agents.agent1_image_analyst import ImageAnalystAgent
 from agents.agent2_evidence_checker import EvidenceCheckerAgent
 from agents.agent3_verdict_writer import VerdictWriterAgent
 
+def extract_claim_from_conversation(user_claim: str) -> str:
+    """
+    Parse Person:/Agent: turns from conversation transcript.
+    Extracts only what the user said, ignoring agent responses.
+    Falls back to full text if no Person: turns found.
+    """
+    lines = user_claim.split("\n")
+    person_lines = [
+        l.replace("Person:", "").strip()
+        for l in lines
+        if l.strip().startswith("Person:")
+    ]
+    if not person_lines:
+        return user_claim  # fallback: no structured turns found
+    return " ".join(person_lines)
+
 
 def main():
     # 1. All config comes from the centralized cfg (loaded from .env)
@@ -77,6 +93,7 @@ def main():
         user_id = str(row.get("user_id", "")).strip()
         image_paths = str(row.get("image_paths", "")).strip()
         user_claim = str(row.get("user_claim", "")).strip()
+        extracted_claim = extract_claim_from_conversation(user_claim)
         claim_object = str(row.get("claim_object", "")).strip()
 
         # Handle split and resolved paths for Agent 1
@@ -95,7 +112,7 @@ def main():
                 raise ValueError("No valid image paths provided for row.")
 
             # Step A: Image Analyst Agent (Agent 1)
-            agent1_out = agent1.analyze(resolved_paths, claim_object, user_claim, cache)
+            agent1_out = agent1.analyze(resolved_paths, claim_object, extracted_claim, cache)
             
             # Step B: Evidence Checker Agent (Agent 2)
             agent2_out = agent2.check(agent1_out, claim_object, user_id, evidence_df, history_df)
@@ -104,7 +121,7 @@ def main():
             final_row = agent3.write(
                 agent1_output=agent1_out,
                 agent2_output=agent2_out,
-                user_claim=user_claim,
+                user_claim=extracted_claim,
                 claim_object=claim_object,
                 user_id=user_id,
                 image_paths=image_paths
