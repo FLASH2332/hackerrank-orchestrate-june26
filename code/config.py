@@ -24,7 +24,7 @@ class _Config:
     """Read-once configuration backed by environment variables."""
 
     # ── Model ──
-    OLLAMA_MODEL: str = os.environ.get("OLLAMA_MODEL", "gemma3n:e4b")
+    OLLAMA_MODEL: str = os.environ.get("OLLAMA_MODEL", "llava:7b")
     OLLAMA_URL: str = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 
     # ── Cloud API ──

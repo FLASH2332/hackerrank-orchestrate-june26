@@ -110,7 +110,7 @@ def _safe(val) -> str:
 
 class EvidenceCheckerAgent:
     def __init__(self, ollama_url: str = "http://localhost:11434",
-                 model: str = "gemma3n:e4b",
+                 model: str = "llava:7b",
                  temperature: float = 1.0,
                  top_p: float = 0.95,
                  top_k: int = 64,

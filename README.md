@@ -6,7 +6,7 @@ Multi-modal evidence review system for the HackerRank Orchestrate hackathon. Ver
 
 ## Architecture
 
-The system uses a **3-agent sequential pipeline**, each powered by `gemma3n:e4b` via local Ollama:
+The system uses a **3-agent sequential pipeline**, each powered by `llava:7b` via local Ollama:
 
 ```
 Claims CSV
