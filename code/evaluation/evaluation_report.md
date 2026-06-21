@@ -7,11 +7,11 @@ Evaluated on **20** sample rows from `dataset/sample_claims.csv`.
 | Field | Accuracy |
 |---|---|
 | claim_status | 70.0% |
-| issue_type | 60.0% |
+| issue_type | 55.0% |
 | object_part | 75.0% |
 | severity | 60.0% |
-| evidence_standard_met | 90.0% |
-| valid_image | 85.0% |
+| evidence_standard_met | 95.0% |
+| valid_image | 90.0% |
 
 ## Operational Analysis
 
@@ -43,8 +43,8 @@ Evaluated on **20** sample rows from `dataset/sample_claims.csv`.
 
 ### Runtime
 
-- Total elapsed time: 583.0s
-- Average per row: 29.2s
+- Total elapsed time: 576.6s
+- Average per row: 28.8s
 - Rows processed: 20
 
 ### Strategy Notes

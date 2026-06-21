@@ -41,6 +41,13 @@ Rules to enforce:
 - If evidence_standard_met is false, or valid_image is false: claim_status must be "not_enough_information", severity must be "unknown", and supporting_image_ids must be "none".
 - User history cannot flip a supported or contradicted verdict.
 
+Severity guide:
+- high: structural damage, safety risk, requires replacement
+- medium: visible damage, affects function or appearance significantly  
+- low: cosmetic only, minor scratch or surface mark
+- none: no damage visible despite claim
+- unknown: cannot determine from available evidence
+
 Your response must be a single JSON object. Do NOT wrap the JSON in markdown code blocks or formatting (no ```json). Do NOT include any intro or outro text. Respond ONLY with the raw JSON.
 
 Format:
